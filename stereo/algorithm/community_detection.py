@@ -481,11 +481,11 @@ class CommunityDetection(AlgorithmBase):
         """
         Plots the total cell abundance for each algorithm.
         """
-        fig, ax = plt.subplots(figsize=(20,20))
+        fig, ax = plt.subplots(figsize=(20,10))
         fig.subplots_adjust(wspace=0)
         set_figure_params(dpi=self.params['dpi'], facecolor='white')
 
-        greys=cycle(['darkgray','gray','dimgray','lightgray'])
+        greys=cycle(['#1560BD', '#C5E17A', '#996633', '#8D90A1'])
         colors = [next(greys) for _ in range(len(self.algo_list))]
         cell_percentage_dfs = []
         plot_columns = []
@@ -552,11 +552,11 @@ class CommunityDetection(AlgorithmBase):
         """
         Plots the total cluster abundance for each algorithm.
         """
-        fig, ax = plt.subplots(figsize=(20,20))
+        fig, ax = plt.subplots(figsize=(20,10))
         fig.subplots_adjust(wspace=0)
         set_figure_params(dpi=self.params['dpi'], facecolor='white')
 
-        greys=cycle(['darkgray','gray','dimgray','lightgray'])
+        greys=cycle(['#1560BD', '#B5E16A', '#996633', '#8D90A1'])
         colors = [next(greys) for _ in range(len(self.algo_list))]
         cell_percentage_dfs = []
         plot_columns = []
@@ -639,3 +639,54 @@ class CommunityDetection(AlgorithmBase):
         if function_ind == "histogram_cell_sums": self.algo_list[slice_id].plot_histogram_cell_sum_window()
         if function_ind == "cluster_mixtures": self.algo_list[slice_id].plot_cluster_mixtures(community_id)
         if function_ind == "cell_mixture_table": self.algo_list[slice_id].plot_stats()
+
+    def run_plots(self):
+        if not os.path.exists(self.params['out_path']):
+            os.makedirs(self.params['out_path'])
+        self.algo_list = []
+        for slice_id, (slice, file) in enumerate(zip([slice._ann_data for slice in self.slices], self.file_names)):
+            slice.uns['slice_id'] = slice_id
+
+            algo = SlidingWindowMultipleSizes(slice, slice_id, file, **self.params)
+            # plot original annotation
+            if self.params['plotting'] > 0:
+                algo.plot_annotation()
+            # add algo object for each slice to a list
+            self.algo_list.append(algo)
+
+        if self.params['plotting'] > 0 and len(self.algo_list) > 1:
+            self.plot_all_annotation()
+
+        for _, algo in enumerate(self.algo_list):
+            # PLOT COMMUNITIES & STATISTICS
+            # plot cell communities clustering result
+            if self.params['plotting'] > 0:
+                algo.plot_clustering()
+
+            # if flag skip_stats is active, skip cell mixture statistics analysis
+            if not self.params['skip_stats']:
+                algo.calculate_cell_mixture_stats()
+                # algo.save_mixture_stats()
+                # if self.params['plotting'] > 1:
+                    # algo.plot_stats()
+                    # algo.plot_celltype_table()
+                # if self.params['plotting'] > 2:
+                #     algo.plot_cluster_mixtures()
+                #     algo.boxplot_stats()
+                # if self.params['plotting'] > 4:
+                #     algo.colorplot_stats(color_system=self.params['color_plot_system'])
+                #     algo.colorplot_stats_per_cell_types()
+                # save final tissue with stats
+                # algo.save_tissue(suffix='_stats')
+        
+        # if self.params['plotting'] > 0 and len(self.algo_list) > 1:
+        #     self.plot_all_clustering()
+        if self.params['plotting'] > 1:
+            self.plot_celltype_mixtures_total([algo.get_cell_mixtures().to_dict() for algo in self.algo_list])
+            self.plot_cell_abundance_total()
+            self.plot_cluster_abundance_total()
+        # if self.params['plotting'] > 3:
+        #     self.plot_cell_abundance_per_slice()
+        #     self.plot_cluster_abundance_per_slice()
+        #     self.plot_cell_perc_in_community_per_slice()
+

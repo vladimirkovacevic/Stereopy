@@ -130,7 +130,7 @@ class CommunityClusteringAlgo(ABC):
         - cell_mixtures (pandas.DataFrame)
 
         """
-        return self.tissue.uns['cell mixtures']
+        return self.adata.uns['cell mixtures']
     
     def set_clustering_labels(self, labels):
         """
@@ -255,6 +255,7 @@ class CommunityClusteringAlgo(ABC):
         clustering_labels = f'tissue_{self.method_key}'
         cell_types_communities = self.adata.obs[[clustering_labels, self.annotation]]
         # remove cells with unknown cell community label
+        cell_types_communities[clustering_labels] = cell_types_communities[clustering_labels].astype('category')
         if 'unknown' in cell_types_communities[clustering_labels].cat.categories:
             cell_types_communities = cell_types_communities[cell_types_communities[clustering_labels] != 'unknown']
             cell_types_communities[clustering_labels] = cell_types_communities[clustering_labels].cat.remove_categories('unknown')
@@ -267,7 +268,7 @@ class CommunityClusteringAlgo(ABC):
                 cell_type_dict[cell]+=1
 
             # remove excluded cell types
-            cell_type_dict = {k:cell_type_dict[k] for k in self.tissue.var.index.sort_values()}
+            cell_type_dict = {k:cell_type_dict[k] for k in self.adata.obs[self.annotation].values.sort_values().unique()}
             
             # create a dictionary of cluster cell type distributions
             stats_table[label] = {k:cell_type_dict[k] for k in cell_type_dict}
@@ -289,8 +290,8 @@ class CommunityClusteringAlgo(ABC):
             if sum(stats.loc[row, :]) == 0:
                 stats = stats.drop(labels=row, axis=0)
 
-        # save absolute cell mixtures to tissue
-        self.tissue.uns['cell mixtures'] = stats.iloc[:,:].copy()
+        # save absolute cell mixtures to adata
+        self.adata.uns['cell mixtures'] = stats.iloc[:,:].copy()
 
         # add column with total cell count per cluster
         stats['total_counts'] = np.array([sum(stats.loc[row, :]) for row in stats.index]).astype(int)
@@ -305,8 +306,8 @@ class CommunityClusteringAlgo(ABC):
         # add column with percentage of all cells belonging to a cluster
         stats['perc_of_all_cells'] = np.around(stats['total_counts'] / stats['total_counts'][-1] * 100, decimals=1)
 
-        # save cell mixture statistics to tissue
-        self.tissue.uns['cell mixtures stats'] = stats.iloc[:, :]
+        # save cell mixture statistics to adata
+        self.adata.uns['cell mixtures stats'] = stats.iloc[:, :]
 
     @timeit
     def plot_stats(self):
@@ -316,7 +317,7 @@ class CommunityClusteringAlgo(ABC):
         The heatmap is saved as a PNG file in the directory specified by `self.dir_path`.
 
         """
-        stats = self.tissue.uns['cell mixtures stats']
+        stats = self.adata.uns['cell mixtures stats']
         set_figure_params(dpi=self.dpi, facecolor='white')
         sns.set(font_scale=1.5)
 
@@ -352,13 +353,13 @@ class CommunityClusteringAlgo(ABC):
         """
         Plot cell mixtures for each cluster (community). Only cell types which have more than min_perc_to_show abundance will be shown.
 
-        The cell mixtures are obtained from `self.tissue.uns['cell mixtures stats']`. 
+        The cell mixtures are obtained from `self.adata.uns['cell mixtures stats']`. 
         The resulting plots are saved as PNG files in the directory specified by `self.dir_path`.
 
         """
         # plot each cluster and its cells mixture
         set_figure_params(dpi=self.dpi, facecolor='white')
-        stats = self.tissue.uns['cell mixtures stats']
+        stats = self.adata.uns['cell mixtures stats']
 
         new_stats = stats.copy()
         new_stats = new_stats.drop(labels=['total_counts', 'perc_of_all_cells'], axis=1)
@@ -602,7 +603,7 @@ class CommunityClusteringAlgo(ABC):
         set_figure_params(dpi=self.dpi, facecolor='white')
         sns.set(font_scale=1)
 
-        stats = self.tissue.uns['cell mixtures'].copy()
+        stats = self.adata.uns['cell mixtures'].copy()
 
         # calculate percentage of all cells of one cell type belonging to each cluster
         ct_perc_per_celltype = stats.iloc[:,:].div(np.array([sum(stats.loc[:, col]) for col in stats.columns]), axis=1).mul(100).astype(int)
